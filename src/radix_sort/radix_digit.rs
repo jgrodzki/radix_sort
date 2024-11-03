@@ -1,5 +1,5 @@
 //TODO: try get rid of Copy/Clone requirement to allow sorting non-Clone custom data
-pub trait RadixDigit: Copy + Send + Sync {
+pub trait RadixDigit: Send + Sync + Copy {
     const DIGITS: u8;
 
     fn get_digit(&self, digit: u8) -> u8;

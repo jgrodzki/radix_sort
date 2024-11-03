@@ -1,6 +1,6 @@
 use radix_sort::{RadixDigit, RadixSort};
 use rand::{Fill, Rng};
-use rayon::slice::ParallelSliceMut;
+use rayon::{current_num_threads, slice::ParallelSliceMut};
 use rdxsort::RdxSort;
 use std::time::{Duration, Instant};
 
@@ -36,18 +36,20 @@ where
 }
 
 fn main() {
-    bench_sort::<u8>(
-        &[1000000000],
+    bench_sort::<u32>(
+        &[100000000],
         5,
         &[
             // ("Standard unstable", <[u8]>::sort_unstable),
             // ("Standard stable", <[u8]>::sort),
             // ("Rayon unstable", ParallelSliceMut::par_sort_unstable),
             // ("Rayon stable", ParallelSliceMut::par_sort),
-            // ("Rdst", rdst::RadixSort::radix_sort_unstable),
+            ("Rdst", rdst::RadixSort::radix_sort_unstable),
             // ("Rdxsort", RdxSort::rdxsort),
             // ("Radix", RadixSort::radix_sort),
             ("Radix 2", RadixSort::radix_sort2),
+            ("Radix 3", RadixSort::radix_sort3),
+            ("Radix 4", RadixSort::radix_sort4),
         ],
     );
 }

@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+arbitrary-chunks = "0.4.1"
 num_cpus = "1.16.0"
 rand = "0.8.5"
 rayon = "1.10.0"
-rdst = "0.20.14"
+rdst = { version = "0.20.14" }
 rdxsort = "0.3.0"

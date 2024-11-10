@@ -1,11 +1,13 @@
 use radix_sort::{RadixDigit, RadixSort};
 use rand::{Fill, Rng};
-use rayon::{current_num_threads, slice::ParallelSliceMut};
-use rdxsort::RdxSort;
-use std::time::{Duration, Instant};
+use std::{
+    thread::available_parallelism,
+    time::{Duration, Instant},
+};
 
 mod msd;
 mod radix_sort;
+mod rdst_lsb;
 
 fn bench_sort<T>(sizes: &[u32], runs: u32, sorts: &[(&str, fn(&mut [T]))])
 where
@@ -37,19 +39,26 @@ where
 
 fn main() {
     bench_sort::<u32>(
-        &[100000000],
+        &[500000000],
         5,
         &[
             // ("Standard unstable", <[u8]>::sort_unstable),
             // ("Standard stable", <[u8]>::sort),
             // ("Rayon unstable", ParallelSliceMut::par_sort_unstable),
             // ("Rayon stable", ParallelSliceMut::par_sort),
-            ("Rdst", rdst::RadixSort::radix_sort_unstable),
+            // ("Rdst", rdst::RadixSort::radix_sort_unstable),
             // ("Rdxsort", RdxSort::rdxsort),
             // ("Radix", RadixSort::radix_sort),
             ("Radix 2", RadixSort::radix_sort2),
-            ("Radix 3", RadixSort::radix_sort3),
-            ("Radix 4", RadixSort::radix_sort4),
+            // ("Radix 3", RadixSort::radix_sort3),
+            // ("Radix 4", RadixSort::radix_sort4),
+            // ("LSB", |e| {
+            //     let cpu_workload = {
+            //         let num_cpus: usize = available_parallelism().unwrap().into();
+            //         (500000000 + num_cpus - 1) / num_cpus
+            //     };
+            //     rdst_lsb::mt_lsb_sort_adapter(e, 0, 3, cpu_workload);
+            // }),
         ],
     );
 }

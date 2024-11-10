@@ -12,108 +12,108 @@ where
     }
 }
 
-// Radix sort 4
+// Radix sort 2
 
 #[test]
-fn radix_sort4_u8() {
+fn radix_sort2_u8() {
     let mut data = vec![0u8; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_u16() {
+fn radix_sort2_u16() {
     let mut data = vec![0u16; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_u32() {
+fn radix_sort2_u32() {
     let mut data = vec![0u32; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_u64() {
+fn radix_sort2_u64() {
     let mut data = vec![0u64; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_u128() {
+fn radix_sort2_u128() {
     let mut data = vec![0u128; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_usize() {
+fn radix_sort2_usize() {
     let mut data = vec![0usize; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_i8() {
+fn radix_sort2_i8() {
     let mut data = vec![0i8; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_i16() {
+fn radix_sort2_i16() {
     let mut data = vec![0i16; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_i32() {
+fn radix_sort2_i32() {
     let mut data = vec![0i32; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_i64() {
+fn radix_sort2_i64() {
     let mut data = vec![0i64; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_i128() {
+fn radix_sort2_i128() {
     let mut data = vec![0i128; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 #[test]
-fn radix_sort4_isize() {
+fn radix_sort2_isize() {
     let mut data = vec![0isize; 1e6 as usize];
     rand::thread_rng().fill(data.as_mut_slice());
-    data.radix_sort4();
+    data.radix_sort2();
     verify_sorted(&data);
 }
 
 // float tests are manual since float types don't implement Eq or Ord
 // floats are sorted according to bit representation
 #[test]
-fn radix_sort4_f32() {
+fn radix_sort2_f32() {
     let mut data = [
         0.39610386,
         0.36372882,
@@ -126,7 +126,7 @@ fn radix_sort4_f32() {
         -0.38027912,
         0.31958795,
     ];
-    data.radix_sort4();
+    data.radix_sort2();
     let sorted_data = [
         f32::NEG_INFINITY,
         -0.4200853,
@@ -145,7 +145,7 @@ fn radix_sort4_f32() {
 }
 
 #[test]
-fn radix_sort4_f64() {
+fn radix_sort2_f64() {
     let mut data = [
         -0.134055627892947,
         0.1076179532413728,
@@ -158,7 +158,7 @@ fn radix_sort4_f64() {
         0.33448000141095235,
         0.45875483155949237,
     ];
-    data.radix_sort4();
+    data.radix_sort2();
     let sorted_data = [
         f64::NEG_INFINITY,
         -0.134055627892947,

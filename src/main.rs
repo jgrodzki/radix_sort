@@ -40,7 +40,7 @@ where
 fn main() {
     bench_sort::<u32>(
         &[500000000],
-        5,
+        1,
         &[
             // ("Standard unstable", <[u8]>::sort_unstable),
             // ("Standard stable", <[u8]>::sort),

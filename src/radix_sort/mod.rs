@@ -6,7 +6,10 @@ use rayon::{
     iter::{IndexedParallelIterator, ParallelIterator},
     slice::ParallelSlice,
 };
-use std::thread::{self, available_parallelism};
+use std::{
+    thread::{self, available_parallelism},
+    time::{Duration, Instant},
+};
 
 mod radix_digit;
 #[cfg(test)]
@@ -78,8 +81,8 @@ impl<T: RadixDigit> RadixSort for [T] {
             } else {
                 (&*copy, &*self)
             };
-            // let mut t1 = Duration::ZERO;
-            // let st1 = Instant::now();
+            let mut t1 = Duration::ZERO;
+            let st1 = Instant::now();
             let mut counts = thread::scope(|s| {
                 let workers = (0..num_cpus)
                     .map(|c| {
@@ -103,10 +106,10 @@ impl<T: RadixDigit> RadixSort for [T] {
                     .map(|h| h.join().unwrap())
                     .collect::<Vec<_>>()
             });
-            // t1 += st1.elapsed();
-            // println!("COUNT: {:.3e}", t1.as_secs_f64());
-            // let mut t2 = Duration::ZERO;
-            // let st2 = Instant::now();
+            t1 += st1.elapsed();
+            println!("COUNT: {:.3e}", t1.as_secs_f64());
+            let mut t2 = Duration::ZERO;
+            let st2 = Instant::now();
             let mut sum = 0;
             for e in 0..256 {
                 for a in 0..num_cpus {
@@ -114,10 +117,10 @@ impl<T: RadixDigit> RadixSort for [T] {
                     counts[a][e] = sum;
                 }
             }
-            // t2 += st2.elapsed();
-            // println!("ACC: {:.3e}", t2.as_secs_f64());
-            // let mut t3 = Duration::ZERO;
-            // let st3 = Instant::now();
+            t2 += st2.elapsed();
+            println!("ACC: {:.3e}", t2.as_secs_f64());
+            let mut t3 = Duration::ZERO;
+            let st3 = Instant::now();
             thread::scope(|s| {
                 (0..num_cpus).rev().for_each(|c| {
                     let left_bound = c * cpu_workload;
@@ -139,8 +142,8 @@ impl<T: RadixDigit> RadixSort for [T] {
                     });
                 });
             });
-            // t3 += st3.elapsed();
-            // println!("PERMUT: {:.3e}", t3.as_secs_f64());
+            t3 += st3.elapsed();
+            println!("PERMUT: {:.3e}", t3.as_secs_f64());
         }
         if T::DIGITS % 2 == 1 {
             self.swap_with_slice(&mut copy);

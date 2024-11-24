@@ -1,13 +1,31 @@
 use radix_sort::{RadixDigit, RadixSort};
 use rand::{Fill, Rng};
 use std::{
-    thread::available_parallelism,
+    fmt::Debug,
     time::{Duration, Instant},
 };
 
 mod msd;
 mod radix_sort;
 mod rdst_lsb;
+
+fn verify_sorted<T>(data: &[T], original: Option<&mut [T]>)
+where
+    T: Clone + Ord + Debug,
+{
+    if let Some(original) = original {
+        original.sort();
+        if data != original {
+            panic!("Not sorted properly!");
+        }
+    } else {
+        let mut copy = data.to_owned();
+        copy.sort();
+        if data != copy {
+            panic!("Not sorted properly!");
+        }
+    }
+}
 
 fn bench_sort<T>(sizes: &[u32], runs: u32, sorts: &[(&str, fn(&mut [T]))])
 where
@@ -39,19 +57,21 @@ where
 
 fn main() {
     bench_sort::<u32>(
-        &[500000000],
-        1,
+        &[500000000, 1000000000, 1500000000],
+        5,
         &[
             // ("Standard unstable", <[u8]>::sort_unstable),
             // ("Standard stable", <[u8]>::sort),
             // ("Rayon unstable", ParallelSliceMut::par_sort_unstable),
             // ("Rayon stable", ParallelSliceMut::par_sort),
             // ("Rdst", rdst::RadixSort::radix_sort_unstable),
-            // ("Rdxsort", RdxSort::rdxsort),
             // ("Radix", RadixSort::radix_sort),
-            ("Radix 2", RadixSort::radix_sort2),
+            // ("Radix 2", RadixSort::radix_sort2),
             // ("Radix 3", RadixSort::radix_sort3),
             // ("Radix 4", RadixSort::radix_sort4),
+            ("Radix 5", RadixSort::radix_sort5),
+            ("Radix 6", RadixSort::radix_sort6),
+            ("Radix 7", RadixSort::radix_sort7),
             // ("LSB", |e| {
             //     let cpu_workload = {
             //         let num_cpus: usize = available_parallelism().unwrap().into();
@@ -61,4 +81,9 @@ fn main() {
             // }),
         ],
     );
+    // let mut data = vec![0u32; 1000000];
+    // rand::thread_rng().fill(data.as_mut_slice());
+    // let mut copy = data.clone();
+    // data.radix_sort7();
+    // verify_sorted(&data, Some(&mut copy));
 }

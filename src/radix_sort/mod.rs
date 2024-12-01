@@ -1,5 +1,3 @@
-use arbitrary_chunks::ArbitraryChunks;
-use core::slice;
 pub use radix_digit::RadixDigit;
 use rayon::{
     current_num_threads,
@@ -8,9 +6,12 @@ use rayon::{
 };
 use std::{
     array::from_fn,
+    fmt::Display,
     mem::MaybeUninit,
     ptr::copy_nonoverlapping,
+    slice::{self, from_raw_parts, from_raw_parts_mut},
     thread::{self, available_parallelism},
+    time::{Duration, Instant},
 };
 
 mod radix_digit;
@@ -25,9 +26,11 @@ pub trait RadixSort {
     fn radix_sort5(&mut self);
     fn radix_sort6(&mut self);
     fn radix_sort7(&mut self);
+    fn radix_sort8(&mut self);
 }
 
-impl<T: RadixDigit> RadixSort for [T] {
+impl<T: RadixDigit + Default + Display> RadixSort for [T] {
+    //Single thread
     fn radix_sort(&mut self) {
         let mut copy = Vec::with_capacity(self.len());
         unsafe {
@@ -72,6 +75,7 @@ impl<T: RadixDigit> RadixSort for [T] {
         }
     }
 
+    //Plain threads
     fn radix_sort2(&mut self) {
         let num_cpus = available_parallelism().unwrap().get();
         let data_len = self.len();
@@ -155,6 +159,7 @@ impl<T: RadixDigit> RadixSort for [T] {
         }
     }
 
+    //Rayon
     fn radix_sort3(&mut self) {
         let cpu_workload = {
             let num_cpus = current_num_threads() * 4;
@@ -206,121 +211,16 @@ impl<T: RadixDigit> RadixSort for [T] {
         }
     }
 
+    //Rayon + derand (global buffers)
     fn radix_sort4(&mut self) {
-        let cpu_workload = {
-            let num_cpus = current_num_threads() * 4;
-            (self.len() + num_cpus - 1) / num_cpus
-        };
-        let mut copy = Vec::with_capacity(self.len());
-        unsafe {
-            copy.set_len(self.len());
-        }
-        for digit in 0..T::DIGITS {
-            let (src, dst) = if digit % 2 == 0 {
-                (&*self, copy.as_mut_slice())
-            } else {
-                (copy.as_slice(), &mut *self)
-            };
-            let counts = src
-                .par_chunks(cpu_workload)
-                .map(|e| {
-                    let mut counts = [0; 256];
-                    for n in e {
-                        counts[n.get_digit(digit) as usize] += 1;
-                    }
-                    counts
-                })
-                .collect::<Vec<_>>();
-            let mut sorted_counts = Vec::with_capacity(256 * counts.len());
-            for b in 0..256 {
-                for c in &counts {
-                    sorted_counts.push(c[b]);
-                }
-            }
-            let mut dst_chunks = dst.arbitrary_chunks_mut(&sorted_counts).collect::<Vec<_>>();
-            dst_chunks.reverse();
-            let mut chunks: Vec<Vec<&mut [T]>> = Vec::with_capacity(counts.len());
-            chunks.resize_with(counts.len(), || Vec::with_capacity(256));
-            for _ in 0..256 {
-                for chunk in chunks.iter_mut() {
-                    chunk.push(dst_chunks.pop().unwrap());
-                }
-            }
-            src.par_chunks(cpu_workload)
-                .zip(chunks)
-                .for_each(|(c, mut chunk)| {
-                    let mut ends = [0usize; 256];
-                    let mut offsets = [0usize; 256];
-                    chunk.iter().zip(&mut ends).for_each(|(bin, end)| {
-                        if !bin.is_empty() {
-                            *end = bin.len() - 1
-                        }
-                    });
-
-                    let mut left = 0;
-                    let mut right = c.len() - 1;
-                    let pre = c.len() % 8;
-
-                    for _ in 0..pre {
-                        let b = c[right].get_digit(digit) as usize;
-
-                        chunk[b][ends[b]] = c[right];
-                        ends[b] = ends[b].wrapping_sub(1);
-                        right = right.saturating_sub(1);
-                    }
-
-                    if pre == c.len() {
-                        return;
-                    }
-
-                    let end = (c.len() - pre) / 2;
-
-                    while left < end {
-                        let bl_0 = c[left].get_digit(digit) as usize;
-                        let bl_1 = c[left + 1].get_digit(digit) as usize;
-                        let bl_2 = c[left + 2].get_digit(digit) as usize;
-                        let bl_3 = c[left + 3].get_digit(digit) as usize;
-                        let br_0 = c[right].get_digit(digit) as usize;
-                        let br_1 = c[right - 1].get_digit(digit) as usize;
-                        let br_2 = c[right - 2].get_digit(digit) as usize;
-                        let br_3 = c[right - 3].get_digit(digit) as usize;
-
-                        chunk[bl_0][offsets[bl_0]] = c[left];
-                        offsets[bl_0] += 1;
-                        chunk[br_0][ends[br_0]] = c[right];
-                        ends[br_0] = ends[br_0].wrapping_sub(1);
-                        chunk[bl_1][offsets[bl_1]] = c[left + 1];
-                        offsets[bl_1] += 1;
-                        chunk[br_1][ends[br_1]] = c[right - 1];
-                        ends[br_1] = ends[br_1].wrapping_sub(1);
-                        chunk[bl_2][offsets[bl_2]] = c[left + 2];
-                        offsets[bl_2] += 1;
-                        chunk[br_2][ends[br_2]] = c[right - 2];
-                        ends[br_2] = ends[br_2].wrapping_sub(1);
-                        chunk[bl_3][offsets[bl_3]] = c[left + 3];
-                        offsets[bl_3] += 1;
-                        chunk[br_3][ends[br_3]] = c[right - 3];
-                        ends[br_3] = ends[br_3].wrapping_sub(1);
-
-                        left += 4;
-                        right = right.wrapping_sub(4);
-                    }
-                });
-        }
-        if T::DIGITS % 2 == 1 {
-            //TODO: make parallel
-            self.swap_with_slice(copy.as_mut_slice());
-        }
-    }
-
-    fn radix_sort5(&mut self) {
         const BUFFER_SIZE: usize = 96;
         let num_cpus = current_num_threads() * 4;
         let cpu_workload = (self.len() + num_cpus - 1) / num_cpus;
-        let mut copy = Vec::with_capacity(self.len());
-        unsafe {
-            copy.set_len(self.len());
-        }
+        let mut copy = self.to_vec();
+        // let mut copy = Vec::with_capacity(self.len());
+        // unsafe {
+        //     copy.set_len(self.len());
+        // }
         let mut buffers = (0..num_cpus)
             .map(|_| {
                 let mut buffer = Vec::<T>::with_capacity(BUFFER_SIZE * 256);
@@ -400,14 +300,16 @@ impl<T: RadixDigit> RadixSort for [T] {
         }
     }
 
-    fn radix_sort6(&mut self) {
+    //Rayon + derand (local buffers)
+    fn radix_sort5(&mut self) {
         const BUFFER_SIZE: usize = 96;
         let num_cpus = current_num_threads() * 4;
         let cpu_workload = (self.len() + num_cpus - 1) / num_cpus;
-        let mut copy = Vec::with_capacity(self.len());
-        unsafe {
-            copy.set_len(self.len());
-        }
+        let mut copy = self.to_vec();
+        // let mut copy = Vec::with_capacity(self.len());
+        // unsafe {
+        //     copy.set_len(self.len());
+        // }
         for digit in 0..T::DIGITS {
             let (src, dst) = if digit % 2 == 0 {
                 (&*self, copy.as_slice())
@@ -473,14 +375,16 @@ impl<T: RadixDigit> RadixSort for [T] {
         }
     }
 
-    fn radix_sort7(&mut self) {
+    //Rayon + derand (local buffers + sizes)
+    fn radix_sort6(&mut self) {
         const BUFFER_SIZE: usize = 96;
         let num_cpus = current_num_threads() * 4;
         let cpu_workload = (self.len() + num_cpus - 1) / num_cpus;
-        let mut copy = Vec::with_capacity(self.len());
-        unsafe {
-            copy.set_len(self.len());
-        }
+        let mut copy = self.to_vec();
+        // let mut copy = Vec::with_capacity(self.len());
+        // unsafe {
+        //     copy.set_len(self.len());
+        // }
         for digit in 0..T::DIGITS {
             let (src, dst) = if digit % 2 == 0 {
                 (&*self, copy.as_slice())
@@ -543,6 +447,211 @@ impl<T: RadixDigit> RadixSort for [T] {
         }
         if T::DIGITS % 2 == 1 {
             self.swap_with_slice(copy.as_mut_slice());
+        }
+    }
+
+    //Plain threads + derand
+    fn radix_sort7(&mut self) {
+        // let t1 = Instant::now();
+        const BUFFER_SIZE: usize = 96;
+        let num_cpus = available_parallelism().unwrap().get();
+        let data_len = self.len();
+        let cpu_workload = data_len / num_cpus;
+        let mut copy = self.to_vec();
+        // let mut copy = Vec::with_capacity(self.len());
+        // unsafe {
+        //     copy.set_len(self.len());
+        // }
+        let bounds = (0..num_cpus)
+            .map(|c| {
+                c * cpu_workload..if (c + 1) == num_cpus {
+                    data_len
+                } else {
+                    (c + 1) * cpu_workload
+                }
+            })
+            .collect::<Vec<_>>();
+        // println!("SETUP: {:.3e}", t1.elapsed().as_secs_f64());
+        for digit in 0..T::DIGITS {
+            let (src, dst) = if digit % 2 == 0 {
+                (&*self, &*copy)
+            } else {
+                (&*copy, &*self)
+            };
+            // let t2 = Instant::now();
+            let mut counts = thread::scope(|s| {
+                let workers = bounds
+                    .iter()
+                    .map(|r| {
+                        s.spawn(move || {
+                            let mut counts = [0; 256];
+                            for n in &src[r.clone()] {
+                                counts[n.get_digit(digit) as usize] += 1;
+                            }
+                            counts
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                workers
+                    .into_iter()
+                    .map(|h| h.join().unwrap())
+                    .collect::<Vec<_>>()
+            });
+            // println!("COUNT: {:.3e}", t2.elapsed().as_secs_f64());
+            // let t3 = Instant::now();
+            let mut sum = 0;
+            for e in 0..256 {
+                for a in 0..counts.len() {
+                    let old_sum = sum;
+                    sum += counts[a][e];
+                    counts[a][e] = old_sum;
+                }
+            }
+            // println!("ACC: {:.3e}", t3.elapsed().as_secs_f64());
+            // let t4 = Instant::now();
+            thread::scope(|s| {
+                bounds.iter().zip(counts).for_each(|(r, mut starts)| {
+                    s.spawn(move || {
+                        let mut buffer = [T::default(); BUFFER_SIZE * 256];
+                        let mut buffer_starts: [usize; 256] = from_fn(|i| i * BUFFER_SIZE);
+                        for e in &src[r.clone()] {
+                            let d = e.get_digit(digit) as usize;
+                            if buffer_starts[d] < (d + 1) * BUFFER_SIZE {
+                                buffer[buffer_starts[d]] = *e;
+                                buffer_starts[d] += 1;
+                            } else {
+                                unsafe {
+                                    copy_nonoverlapping(
+                                        &buffer[d * BUFFER_SIZE],
+                                        &dst[starts[d]] as *const T as *mut T,
+                                        BUFFER_SIZE,
+                                    );
+                                }
+                                starts[d] += BUFFER_SIZE;
+                                buffer[d * BUFFER_SIZE] = *e;
+                                buffer_starts[d] = d * BUFFER_SIZE + 1;
+                            }
+                        }
+                        for bin in 0..256 {
+                            if buffer_starts[bin] - (bin * BUFFER_SIZE) > 0 {
+                                unsafe {
+                                    copy_nonoverlapping(
+                                        &buffer[bin * BUFFER_SIZE],
+                                        &dst[starts[bin]] as *const T as *mut T,
+                                        buffer_starts[bin] - (bin * BUFFER_SIZE),
+                                    );
+                                }
+                            }
+                        }
+                    });
+                });
+            });
+            // println!("PERMUT: {:.3e}", t4.elapsed().as_secs_f64());
+        }
+        if T::DIGITS % 2 == 1 {
+            self.swap_with_slice(&mut copy);
+        }
+    }
+
+    //Plain threads + derand
+    fn radix_sort8(&mut self) {
+        // let t1 = Instant::now();
+        const BUFFER_SIZE: usize = 96;
+        let num_cpus = available_parallelism().unwrap().get();
+        let data_len = self.len();
+        let cpu_workload = data_len / num_cpus;
+        let mut copy = self.to_vec();
+        // let mut copy = Vec::with_capacity(self.len());
+        // unsafe {
+        //     copy.set_len(self.len());
+        // }
+        let bounds = (0..num_cpus)
+            .map(|c| {
+                c * cpu_workload..if (c + 1) == num_cpus {
+                    data_len
+                } else {
+                    (c + 1) * cpu_workload
+                }
+            })
+            .collect::<Vec<_>>();
+        // println!("SETUP: {:.3e}", t1.elapsed().as_secs_f64());
+        for digit in 0..T::DIGITS {
+            let (src, dst) = if digit % 2 == 0 {
+                (&*self, &*copy)
+            } else {
+                (&*copy, &*self)
+            };
+            // let t2 = Instant::now();
+            let mut counts = thread::scope(|s| {
+                let workers = bounds
+                    .iter()
+                    .cloned()
+                    .map(|r| {
+                        s.spawn(move || {
+                            let mut counts = [0; 256];
+                            for n in &src[r] {
+                                counts[n.get_digit(digit) as usize] += 1;
+                            }
+                            counts
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                workers
+                    .into_iter()
+                    .map(|h| h.join().unwrap())
+                    .collect::<Vec<_>>()
+            });
+            // println!("COUNT: {:.3e}", t2.elapsed().as_secs_f64());
+            // let t3 = Instant::now();
+            let mut sum = 0;
+            for e in 0..256 {
+                for a in 0..counts.len() {
+                    let old_sum = sum;
+                    sum += counts[a][e];
+                    counts[a][e] = old_sum;
+                }
+            }
+            // println!("ACC: {:.3e}", t3.elapsed().as_secs_f64());
+            // let t4 = Instant::now();
+            thread::scope(|s| {
+                bounds.iter().zip(counts).for_each(|(r, mut starts)| {
+                    s.spawn(move || {
+                        let mut buffer = [MaybeUninit::uninit(); BUFFER_SIZE * 256];
+                        let mut buffer_starts: [usize; 256] = from_fn(|i| i * BUFFER_SIZE);
+                        for e in &src[r.clone()] {
+                            let d = e.get_digit(digit) as usize;
+                            buffer[buffer_starts[d]].write(*e);
+                            buffer_starts[d] += 1;
+                            if buffer_starts[d] == (d + 1) * BUFFER_SIZE {
+                                unsafe {
+                                    copy_nonoverlapping(
+                                        buffer[d * BUFFER_SIZE].as_ptr(),
+                                        &dst[starts[d]] as *const T as *mut T,
+                                        BUFFER_SIZE,
+                                    );
+                                }
+                                starts[d] += BUFFER_SIZE;
+                                buffer_starts[d] = d * BUFFER_SIZE;
+                            }
+                        }
+                        for bin in 0..256 {
+                            if buffer_starts[bin] - (bin * BUFFER_SIZE) > 0 {
+                                unsafe {
+                                    copy_nonoverlapping(
+                                        buffer[bin * BUFFER_SIZE].as_ptr(),
+                                        &dst[starts[bin]] as *const T as *mut T,
+                                        buffer_starts[bin] - (bin * BUFFER_SIZE),
+                                    );
+                                }
+                            }
+                        }
+                    });
+                });
+            });
+            // println!("PERMUT: {:.3e}", t4.elapsed().as_secs_f64());
+        }
+        if T::DIGITS % 2 == 1 {
+            self.copy_from_slice(&mut copy);
         }
     }
 }

@@ -58,6 +58,7 @@ where
 fn main() {
     bench_sort::<u32>(
         &[500000000, 1000000000, 1500000000],
+        // &[1000000000],
         5,
         &[
             // ("Standard unstable", <[u8]>::sort_unstable),
@@ -69,9 +70,10 @@ fn main() {
             // ("Radix 2", RadixSort::radix_sort2),
             // ("Radix 3", RadixSort::radix_sort3),
             // ("Radix 4", RadixSort::radix_sort4),
-            ("Radix 5", RadixSort::radix_sort5),
+            // ("Radix 5", RadixSort::radix_sort5),
             ("Radix 6", RadixSort::radix_sort6),
             ("Radix 7", RadixSort::radix_sort7),
+            ("Radix 8", RadixSort::radix_sort8),
             // ("LSB", |e| {
             //     let cpu_workload = {
             //         let num_cpus: usize = available_parallelism().unwrap().into();
@@ -84,6 +86,6 @@ fn main() {
     // let mut data = vec![0u32; 1000000];
     // rand::thread_rng().fill(data.as_mut_slice());
     // let mut copy = data.clone();
-    // data.radix_sort7();
+    // data.radix_sort8();
     // verify_sorted(&data, Some(&mut copy));
 }

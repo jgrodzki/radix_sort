@@ -1,5 +1,5 @@
-//TODO: try get rid of Copy/Clone requirement to allow sorting non-Clone custom data
-pub trait RadixDigit: Send + Sync + Copy {
+//TODO: should restrict to Unpin?
+pub trait RadixDigit: Send + Sync {
     const DIGITS: u8;
 
     fn get_digit(&self, digit: u8) -> u8;

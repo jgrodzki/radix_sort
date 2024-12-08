@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-arbitrary-chunks = "0.4.1"
+libc = "0.2.167"
 rand = "0.8.5"
 rayon = "1.10.0"
 rdst = { version = "0.20.14" }

@@ -1,4 +1,4 @@
-use super::RadixSort;
+use super::RadixSortCopyOnly;
 use rand::Rng;
 
 fn verify_sorted<T>(data: &[T])

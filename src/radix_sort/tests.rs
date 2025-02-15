@@ -1,8 +1,6 @@
-use core::f32;
-use std::cmp::Ordering;
-
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use rand_distr::{Distribution, Standard, Uniform};
+use std::cmp::Ordering;
 
 use super::RadixSort;
 

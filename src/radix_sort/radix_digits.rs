@@ -122,3 +122,15 @@ impl RadixDigits for f64 {
         (b as u64 >> index * 8) as u8
     }
 }
+
+impl<T, U> RadixDigits for (T, U)
+where
+    T: RadixDigits + Send + Sync,
+    U: Send + Sync,
+{
+    const NUMBER_OF_DIGITS: u8 = T::NUMBER_OF_DIGITS;
+
+    fn get_digit(&self, index: u8) -> u8 {
+        self.0.get_digit(index)
+    }
+}

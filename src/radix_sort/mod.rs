@@ -27,14 +27,14 @@ where
     fn radix_sort2(&mut self);
     //Partially initialized temp memory
     fn radix_sort3(&mut self);
-    //Derandomization
-    fn radix_sort4(&mut self);
     //Rayon
+    fn radix_sort4(&mut self);
+    //Buffering of writes
     fn radix_sort5(&mut self);
 }
 
 pub trait RadixSort<T: RadixDigits> {
-    fn radix_sort(&mut self);
+    fn radix_sort(&mut self, cores: usize);
     fn radix_sort_big(&mut self);
 }
 
@@ -60,14 +60,15 @@ pub fn counting_sort(data: &mut [u8]) {
 }
 
 impl<T: RadixDigits> RadixSort<T> for [T] {
-    //Plain threads + derand + no copy
-    fn radix_sort(&mut self) {
-        const PAGE_SIZE: usize = 4096;
+    fn radix_sort(&mut self, cores: usize) {
+        const NUMBER_OF_THREADS: usize = 10;
         const BUFFER_SIZE: usize = 96;
+        const PAGE_SIZE: usize = 4096;
         let elements_per_cpu = self.len().div_ceil(
-            available_parallelism()
-                .expect("failed to acquire number of CPUs")
-                .get(),
+            // available_parallelism()
+            //     .expect("failed to acquire number of CPUs")
+            //     .get(),
+            cores,
         );
         let mut temp: Vec<MaybeUninit<T>> = Vec::with_capacity(self.len());
         unsafe {
@@ -384,7 +385,7 @@ where
         }
     }
 
-    //Plain threads
+    //Native threads
     fn radix_sort2(&mut self) {
         let elements_per_chunk = self.len().div_ceil(
             available_parallelism()
@@ -452,6 +453,7 @@ where
         }
     }
 
+    //Partially initialized temp memory
     fn radix_sort3(&mut self) {
         const PAGE_SIZE: usize = 4096;
         let elements_per_chunk = self.len().div_ceil(
@@ -531,10 +533,73 @@ where
         }
     }
 
-    //Plain threads + derand
+    //Rayon
     fn radix_sort4(&mut self) {
         const PAGE_SIZE: usize = 4096;
+        const CHUNK_MULTIPLIER: usize = 2;
+        let elements_per_chunk = self
+            .len()
+            .div_ceil(current_num_threads() * CHUNK_MULTIPLIER);
+        let mut temp = Vec::with_capacity(self.len());
+        unsafe {
+            temp.set_len(self.len());
+            let temp_as_bytes = slice::from_raw_parts_mut(
+                temp.as_mut_ptr() as *mut u8,
+                self.len() * size_of::<T>(),
+            );
+            temp_as_bytes
+                .iter_mut()
+                .step_by(PAGE_SIZE)
+                .for_each(|element| *element = 0);
+        }
+        for current_digit_index in 0..T::NUMBER_OF_DIGITS {
+            let (src, dst) = if current_digit_index % 2 == 0 {
+                (self.as_ref(), temp.as_slice())
+            } else {
+                (temp.as_slice(), self.as_ref())
+            };
+            let mut bin_histogram_per_chunk = src
+                .par_chunks(elements_per_chunk)
+                .map(|src_chunk| {
+                    let mut bin_histogram = [0; 256];
+                    for element in src_chunk {
+                        bin_histogram[element.get_digit(current_digit_index) as usize] += 1;
+                    }
+                    bin_histogram
+                })
+                .collect::<Vec<_>>();
+            let bin_starts_per_chunk = {
+                let mut prefix_sum = 0;
+                for digit in 0..256 {
+                    for bin_histogram in &mut bin_histogram_per_chunk {
+                        let new_prefix_sum = prefix_sum + bin_histogram[digit];
+                        bin_histogram[digit] = prefix_sum;
+                        prefix_sum = new_prefix_sum;
+                    }
+                }
+                bin_histogram_per_chunk
+            };
+            src.par_chunks(elements_per_chunk)
+                .zip(bin_starts_per_chunk)
+                .for_each(|(src_chunk, mut bin_starts)| {
+                    for element in src_chunk {
+                        let digit_value = element.get_digit(current_digit_index as u8) as usize;
+                        let dst =
+                            unsafe { slice::from_raw_parts_mut(dst.as_ptr() as *mut T, dst.len()) };
+                        dst[bin_starts[digit_value]] = *element;
+                        bin_starts[digit_value] += 1;
+                    }
+                });
+        }
+        if T::NUMBER_OF_DIGITS % 2 == 1 {
+            self.copy_from_slice(&temp);
+        }
+    }
+
+    //Buffering of writes
+    fn radix_sort5(&mut self) {
         const BUFFER_SIZE: usize = 96;
+        const PAGE_SIZE: usize = 4096;
         let elements_per_chunk = self.len().div_ceil(
             available_parallelism()
                 .expect("failed to acquire number of CPUs")
@@ -629,92 +694,6 @@ where
                         });
                     });
             });
-        }
-        if T::NUMBER_OF_DIGITS % 2 == 1 {
-            self.copy_from_slice(&temp);
-        }
-    }
-
-    //Rayon
-    fn radix_sort5(&mut self) {
-        const PAGE_SIZE: usize = 4096;
-        const BUFFER_SIZE: usize = 96;
-        println!("{}", current_num_threads());
-        let elements_per_chunk = self.len().div_ceil(current_num_threads());
-        let mut temp = Vec::with_capacity(self.len());
-        unsafe {
-            temp.set_len(self.len());
-            let temp_as_bytes = slice::from_raw_parts_mut(
-                temp.as_mut_ptr() as *mut u8,
-                self.len() * size_of::<T>(),
-            );
-            temp_as_bytes
-                .iter_mut()
-                .step_by(PAGE_SIZE)
-                .for_each(|element| *element = 0);
-        }
-        for current_digit_index in 0..T::NUMBER_OF_DIGITS {
-            let (src, dst) = if current_digit_index % 2 == 0 {
-                (self.as_ref(), temp.as_slice())
-            } else {
-                (temp.as_slice(), self.as_ref())
-            };
-            let mut bin_histogram_per_chunk = src
-                .par_chunks(elements_per_chunk)
-                .map(|src_chunk| {
-                    let mut bin_histogram = [0; 256];
-                    for element in src_chunk {
-                        bin_histogram[element.get_digit(current_digit_index) as usize] += 1;
-                    }
-                    bin_histogram
-                })
-                .collect::<Vec<_>>();
-            let bin_starts_per_chunk = {
-                let mut prefix_sum = 0;
-                for digit in 0..256 {
-                    for bin_histogram in &mut bin_histogram_per_chunk {
-                        let new_prefix_sum = prefix_sum + bin_histogram[digit];
-                        bin_histogram[digit] = prefix_sum;
-                        prefix_sum = new_prefix_sum;
-                    }
-                }
-                bin_histogram_per_chunk
-            };
-            src.par_chunks(elements_per_chunk)
-                .zip(bin_starts_per_chunk)
-                .for_each(|(src_chunk, mut bin_starts)| {
-                    let mut derand_buffers = MaybeUninit::<[[T; BUFFER_SIZE]; 256]>::uninit();
-                    let derand_buffers_slice = unsafe { derand_buffers.assume_init_mut() };
-                    let mut derand_buffer_sizes = [0; 256];
-                    for element in src_chunk {
-                        let digit_value = element.get_digit(current_digit_index) as usize;
-                        derand_buffers_slice[digit_value][derand_buffer_sizes[digit_value]] =
-                            *element;
-                        derand_buffer_sizes[digit_value] += 1;
-                        if derand_buffer_sizes[digit_value] == BUFFER_SIZE {
-                            unsafe {
-                                copy_nonoverlapping(
-                                    derand_buffers_slice[digit_value].as_ptr() as *const T,
-                                    &dst[bin_starts[digit_value]] as *const T as *mut T,
-                                    BUFFER_SIZE,
-                                );
-                            }
-                            bin_starts[digit_value] += BUFFER_SIZE;
-                            derand_buffer_sizes[digit_value] = 0;
-                        }
-                    }
-                    for digit in 0..256 {
-                        if derand_buffer_sizes[digit] > 0 {
-                            unsafe {
-                                copy_nonoverlapping(
-                                    derand_buffers_slice[digit].as_ptr() as *const T,
-                                    &dst[bin_starts[digit]] as *const T as *mut T,
-                                    derand_buffer_sizes[digit],
-                                );
-                            }
-                        }
-                    }
-                });
         }
         if T::NUMBER_OF_DIGITS % 2 == 1 {
             self.copy_from_slice(&temp);
